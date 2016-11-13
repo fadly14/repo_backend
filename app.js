@@ -3,8 +3,12 @@ const bodyParser = require('body-parser');
 
 const formidable = require('formidable');
 
+const cookieParser = require('cookie-parser');
+
 const mongoose = require('mongoose');
 const app = express();
+
+const logger = require('morgan')
 
 mongoose.connect('mongodb://127.0.0.1:27017/db_chat');
 
@@ -17,8 +21,20 @@ db.once('open', function() {
 
 const User = require('./user-model');
 
+function allowCrossDomain(req, res, next) {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+
+  next();
+};
+
+
+app.use(logger('dev'));
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(allowCrossDomain);
 
 app.get('/test', function (req, res) {
   res.status(200).json({ hi: 'hello world' });
@@ -26,42 +42,44 @@ app.get('/test', function (req, res) {
 
 app.post('/sign-in', signIn);
 
+// app.get('/friend-list/:userId', friendList);
+
 function signIn(req, res) {
-
-  // var ee = JSON.parse(req.body);
-  console.log(req);
-
-  for ( property in req.body ) {
-    console.log( property ); // Outputs: foo, fiz or fiz, foo
+  // console.log(req);
+  if (!req.body.username || !req.body.password) {
+    return _returnSignIn(res, 200, 'Wrong format');
   }
 
-  if (!req.body) {
-    return res.status(200).json({
-      message: 'Wrong formar'
-    });
-  }
-
-  // console.log(req.body.username);
   User.find({
     username: req.body.username
-    ,password: req.body.password
   },function (err, users) {
 
-    // console.log(req.body);
+    var status = 200;
+    var message = 'success';
     if (users.length < 1) {
-      return res.status(200).json({
-        input: req.body,
-        output: 'username and password not match'
-      })
+      status = 401;
+      message = 'username not found';
+      return _returnSignIn(res, status, message);
     }
 
-    User.find( {username: {$ne: req.body.username}} , function (err2, usersException) {
-      res.status(200).json({
-        input: req.body,
-        output: usersException
-      });
-    })
+    if (req.body.password !== users[0].password) {
+      status = 401;
+      message = 'password not match';
+      return _returnSignIn(res, status, message);
+    }
 
+    return _returnSignIn(res, status, {userId: users[0].id});
+
+  });
+}
+
+// function friendList(req, res) {
+//   console.log(req.params);
+// }
+
+function _returnSignIn(res, status, message) {
+  return res.status(status).json({
+    output: message
   });
 }
 
